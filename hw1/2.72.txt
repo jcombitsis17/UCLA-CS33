@@ -1,0 +1,5 @@
+A. The function copy_int always copies the value to the buffer because when maxbytes, a signed value, and sizeof(val), an unsigned value, are subtracted, the result (by default in C) is an unsigned value. An unsigned value is always >= 0, so the if statement is always true, even when maxbytes is too small.
+
+B. To fix this problem, the expression sizeof(val) needs to be signed before it is subtracted. So the if statement would become:
+
+if (maxbytes-(int)sizeof(val) >= 0)...

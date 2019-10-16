@@ -1,0 +1,3 @@
+The expression returns 16 because b is now aligned as 8 (instead of 1).
+The chars a and c are still aligned as 1, so adding them to the 8 of b
+forces the size allocated to be increased from 8 to 16.

@@ -1,0 +1,18 @@
+Answer: A=9,B=5
+
+Work:
+The setVal function adds the values at %rsi+8 and %rsi+32, and then
+stores the result in %rdi+184.
+This means that q->t and q->u are located at %rsi+8 and %rsi+32, respectively.
+If q->t is at 8(%rsi), then B is between 4 and 8.
+If q->s is at offset 8+4=12, and q->u is at %rsi+32, then (12+2*A) is between
+24 and 32. Hence A is between 6 and 10.
+For the 3rd and final instruction (before the return), a long is moved to 
+%rdi+184. Longs are 8 bytes, so 4*A*B is between 176 and 184. Hence A*B is 
+between 44 and 46.
+
+4 <= B <= 8
+6 <= A <= 10
+44 <= A*B <= 46
+
+The only values that satisfy all 3 conditions are A=9,B=5.

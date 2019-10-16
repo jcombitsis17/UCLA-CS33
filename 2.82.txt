@@ -1,0 +1,13 @@
+A. Yields 0 when x or y is equal to INT_MIN, because (-INT_MIN), i.e. 2^31, goes out of bounds.
+
+B. Always 1. Mathematically this statement is true, because <<4 is equivalent to *16.
+
+C. Always 1. The +1 on the LHS is necessary because, e.g., the "inverse" of x is -x-1.
+
+D. Always 1. (x-y) = -(y-x)
+
+E. Always 1. Signed bits remain the same due to arithmetic right shift. Left shift fills in 0's, and 0 < 1.
+
+F. Always 1. (ux & (-1 << 31)) gives the sign of the number (i.e. 10---0 or 00---0). (ux >> 1) adds on all the other bits, but right shifted by 1.
+
+G. Always 1. Both sides of the equation give the 3 lowest bits.

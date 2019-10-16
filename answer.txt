@@ -1,0 +1,12 @@
+12.17
+-----
+A. Nothing prints because at the time of the printf statement, execution is 
+still in the main thread buffer, and all other threads are terminated, so the 
+program will not print to stdout.
+
+B. pthread_exit() or pthread_join()
+
+12.25
+-----
+echo_cnt is thread-safe because it uses a mutex. However, it is not reentrant
+because all threads share the same mutex.

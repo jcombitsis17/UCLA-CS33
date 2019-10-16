@@ -1,0 +1,22 @@
+1. The instructions in the trace produce an incorrect result due to overflow.
+The instruction that causes the problem is:
+54e014  48 8d 04 ad 02 00 00 00 lea 0x2(,%rbp,4),%rax . This is because %rbp
+is shifted by 2, so it can overflow if its value is too large (the 2 leftmost
+bits will get shifted out).
+
+2. Emacs uses 62 bits for integers, in combination with a 2-bit "tag" when
+converting to Elisp objects. The max/min for an int would normally be 2^63-1
+and -2^63, but since Emacs shifts its integers by 2 to account for the tag, 
+the actual min value is -2^61, which is the number that gets printed out.
+
+3. This expression essentially multiplies (2^61-1) by itself 4 times. The
+first operation would be (2^61-1)(2^61-1), which is the same as:
+(2^61 << 61)-(2^62)+1, which gives two 1's followed by 61 0's, and then a 1 at
+the end. The two leftmost 1's will disappear when the Elisp objects are 
+shifted left and then right by 2 in order to fit the 2-bit tag, so the final
+result is just 1.
+
+4. The -fwrapv flag tells the compiler to wrap around when overflow occurs.
+Because of this, the "wrapped" result that is given will be an incorrect
+answer if the number overflows. Emacs, however, will not sense an error, and
+will compile and run, simply outputting the incorrect result.

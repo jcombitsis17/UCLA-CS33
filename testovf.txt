@@ -1,0 +1,19 @@
+Method (1) and (3) are the same. Method (2) is different because of the 
+-fwrapv flag. (1) and (3) always return 0 because it knows that the
+addition will overflow, and that n + any positive number can never be less than
+n. (2) performs the full set of instructions, including the addition, because
+the -fwrapv flag tells the compiler to handle overflow by overflowing from 
+LONG_MAX to LONG_MIN.
+
+(1), (3) Assembly Code:
+
+xorl    %eax, %eax
+ret
+
+(2) Assembly Code:
+
+movabsq $9223372036854775807, %rax
+addq    %rdi, %rax
+cmpq    %rdi, %rax
+setl    %al
+ret

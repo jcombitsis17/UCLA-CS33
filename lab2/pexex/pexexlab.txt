@@ -1,0 +1,25 @@
+1. Gather Instruction Traces
+
+gdb ~eggert/bin64/bin/emacs-26.1
+Use gdb to debug emacs
+
+break Ftimes
+set a breakpoint at the Ftimes function
+
+set disassemble-next-line on
+Set debugger so that it shows the assembly code
+
+r -batch -eval '(print (* 1250284240 -1844255039))'
+run command so that it stops at the breakpoint
+
+info registers (or i r [reg])
+View the state of all registers
+
+si
+Step to next instruction
+
+x [address]
+Access memory at [addr]
+
+*** i r [reg], si, and x [addr] were repeated multiple times 
+    until I reached the end of the Ftimes function ***
